@@ -1,0 +1,170 @@
+<?xml version="1.0" encoding="utf-8"?>
+<manifest xmlns:android="http://schemas.android.com/apk/res/android">
+
+    <!-- Voice dictation (optional): download the offline model, then record for on-device STT. -->
+    <uses-permission android:name="android.permission.INTERNET" />
+    <uses-permission android:name="android.permission.RECORD_AUDIO" />
+
+    <!-- Package visibility (Android 11+) for speech recognizer components, and for LightChat,
+         whose provider holds the one-time login code the strip pins (see LoginCode). Without the
+         package entry the ContentResolver cannot see that authority at all and the lookup fails
+         the same way it does on a phone where LightChat isn't installed — which is to say
+         silently, and indistinguishably from "no code has arrived". -->
+    <!-- Signature-level: Android grants it only to a package carrying the same certificate, so the
+         only caller that can ever read the migration provider is another build of this keyboard.
+         Declared by BOTH builds under one fixed name. Two apps declaring one permission is an
+         install conflict unless they are signed by the same key — these are, and the CI check on
+         signing-fingerprint.txt is what keeps that true. -->
+    <permission
+        android:name="app.lightphonekeyboard.permission.MIGRATE"
+        android:protectionLevel="signature" />
+    <uses-permission android:name="app.lightphonekeyboard.permission.MIGRATE" />
+
+    <queries>
+        <!-- The applicationId this keyboard is moving to. Without the entry, getPackageInfo throws
+             for it on Android 11+ exactly as it does for a package that isn't installed, so the
+             notice could never tell "already moved" from "not yet" and would nag forever. -->
+        <package android:name="com.gios.brightkeyboard" />
+        <!-- And the id being left behind, so the NEW build can resolve the old app's migration
+             authority. call() on a provider this app cannot see fails exactly as it does when the
+             package is absent, which would lose every setting the move exists to carry. -->
+        <package android:name="app.lightphonekeyboard" />
+        <package android:name="com.gios.lightchat" />
+        <intent>
+            <action android:name="android.speech.RecognitionService" />
+        </intent>
+    </queries>
+
+    <application
+        android:allowBackup="true"
+        android:icon="@mipmap/ic_launcher"
+        android:label="@string/app_name"
+        android:supportsRtl="true"
+        android:theme="@style/Theme.BrightKeyboard">
+
+        <!-- The system keyboard (IME). Once enabled + selected, it appears in every text field. -->
+        <service
+            android:name=".LightImeService"
+            android:exported="true"
+            android:label="@string/app_name"
+            android:permission="android.permission.BIND_INPUT_METHOD">
+            <intent-filter>
+                <action android:name="android.view.InputMethod" />
+            </intent-filter>
+            <meta-data
+                android:name="android.view.im"
+                android:resource="@xml/method" />
+        </service>
+
+        <!-- Hands this app's settings and saved words to the build that replaces it. See Migration.
+             The authority carries ${applicationId} on purpose: both builds compile this manifest,
+             and two installed apps declaring ONE authority is INSTALL_FAILED_CONFLICTING_PROVIDER
+             — the new keyboard would refuse to install beside the old one, which is the single
+             thing this whole move depends on being possible. -->
+        <provider
+            android:name=".MigrationProvider"
+            android:authorities="${applicationId}.migration"
+            android:exported="true"
+            android:permission="app.lightphonekeyboard.permission.MIGRATE" />
+
+        <!-- What the notice in the keyboard opens: why the app is moving, and the way across. -->
+        <activity
+            android:name=".MigrationActivity"
+            android:exported="false"
+            android:screenOrientation="portrait" />
+
+        <!-- Transparent shim: requests RECORD_AUDIO on the IME's behalf (an IME can't ask directly). -->
+        <activity
+            android:name=".MicPermissionActivity"
+            android:exported="false"
+            android:excludeFromRecents="true"
+            android:theme="@android:style/Theme.Translucent.NoTitleBar" />
+
+        <!-- Tiny launcher screen: a one-tap path to enable/select the keyboard. -->
+        <activity
+            android:name=".SetupActivity"
+            android:exported="true"
+            android:screenOrientation="portrait"
+            android:windowSoftInputMode="adjustResize">
+            <intent-filter>
+                <action android:name="android.intent.action.MAIN" />
+                <category android:name="android.intent.category.LAUNCHER" />
+            </intent-filter>
+        </activity>
+
+        <!-- Keyboard layout picker (QWERTY / AZERTY / QWERTZ), opened from setup. -->
+        <activity
+            android:name=".KeyboardLayoutActivity"
+            android:exported="false"
+            android:screenOrientation="portrait" />
+
+        <!-- Keyboard height picker (Short / Medium / Tall), opened from setup. -->
+        <activity
+            android:name=".KeyboardHeightActivity"
+            android:exported="false"
+            android:screenOrientation="portrait" />
+
+        <!-- Hands a picked GIF to the app being typed into. Not exported: the only thing that
+             ever reads from it is whoever receives an InputConnection commitContent grant. -->
+        <provider
+            android:name="androidx.core.content.FileProvider"
+            android:authorities="${applicationId}.gifs"
+            android:exported="false"
+            android:grantUriPermissions="true">
+            <meta-data
+                android:name="android.support.FILE_PROVIDER_PATHS"
+                android:resource="@xml/gif_paths" />
+        </provider>
+
+        <!-- GIFs: the key the picker searches with, and the note about the network. -->
+        <activity
+            android:name=".GifsActivity"
+            android:exported="false"
+            android:screenOrientation="portrait" />
+
+        <!-- One-handed: off, or crowded against the left or right edge. -->
+        <activity
+            android:name=".OneHandedActivity"
+            android:exported="false"
+            android:screenOrientation="portrait" />
+
+        <!-- Swipe typing: how far the decoder reaches, and how many readings delete offers. -->
+        <activity
+            android:name=".SwipeActivity"
+            android:exported="false"
+            android:screenOrientation="portrait" />
+
+        <!-- Emoji: the default skin tone, and emoji in the suggestion strip. Opened from setup. -->
+        <activity
+            android:name=".EmojiSettingsActivity"
+            android:exported="false"
+            android:screenOrientation="portrait" />
+
+        <!-- How much autocorrect fixes, and what the delete key does after it. Opened from setup. -->
+        <activity
+            android:name=".AutocorrectActivity"
+            android:exported="false"
+            android:screenOrientation="portrait" />
+
+        <!-- Which dictionary language is in use, and downloading it the first time. -->
+        <activity
+            android:name=".LanguagesActivity"
+            android:exported="false"
+            android:screenOrientation="portrait" />
+
+        <!-- The learned touch targets, drawn, with a field to type in. adjustResize so the keyboard
+             opening shrinks the window rather than sliding the map off the top of it. -->
+        <activity
+            android:name=".TouchActivity"
+            android:exported="false"
+            android:screenOrientation="portrait"
+            android:windowSoftInputMode="adjustResize" />
+
+        <!-- The personal word list (names etc), opened from setup. -->
+        <activity
+            android:name=".UserWordsActivity"
+            android:exported="false"
+            android:screenOrientation="portrait"
+            android:windowSoftInputMode="adjustResize" />
+    </application>
+</manifest>
